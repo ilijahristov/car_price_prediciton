@@ -147,6 +147,10 @@ def fit_preprocessor(df):
     )
     global_hp_median = float(df["engine_hp"].median())
 
+    # --- learn: medians for the log-transformed numeric columns ---
+    # np.log(None) throws, so any request omitting these needs a fallback.
+    numeric_medians = {c: float(df[c].median()) for c in LOG_COLS}
+
     # --- learn: the mode for number_of_doors ---
     doors_mode = float(df["number_of_doors"].mode()[0])
 
@@ -169,6 +173,7 @@ def fit_preprocessor(df):
         "electric_hp_median": electric_hp_median,
         "global_hp_median": global_hp_median,
         "doors_mode": doors_mode,
+        "numeric_medians": numeric_medians,
         "make_freq": make_freq,
         "feature_names": None,   # filled in below
         "X_mean": None,
@@ -244,6 +249,12 @@ def _shared_feature_build(df, params, is_training):
 
     # --- number_of_doors: mode learned at training time ---
     df["number_of_doors"] = df["number_of_doors"].fillna(params["doors_mode"])
+
+    # --- log columns: fill any gaps with the medians learned at fit time ---
+    for col, median in params["numeric_medians"].items():
+        if col not in df.columns:
+            df[col] = median
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(median)
 
     df = _fix_highway_mpg(df)
     df = _build_tag_columns(df, params["tag_list"])
